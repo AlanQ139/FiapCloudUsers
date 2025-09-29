@@ -8,69 +8,74 @@ using UserService.Models;
 namespace UserService.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")] // api/Users
-    [Authorize] // Todos os endpoints aqui requerem autenticação por padrão
+    [Route("api/[controller]")]
     public class UsersController : ControllerBase
     {
-        private readonly IUserService _userService;
+        private readonly IUserRepository _repo;
 
-        public UsersController(IUserService userService)
-        {
-            _userService = userService;
-        }
+        public UsersController(IUserRepository repo) => _repo = repo;
 
         [HttpGet]
-        [Authorize(Roles = "Admin")] // Apenas admins podem listar todos os usuários
-        public async Task<IActionResult> GetAllUsers()
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> GetAll([FromQuery] int page = 1, [FromQuery] int pageSize = 50)
         {
-            var users = await _userService.GetAllUsersAsync();
-            return Ok(users);
+            var users = await _repo.GetAllAsync(page, pageSize);
+            var result = users.Select(u => new UserResponseDto
+            {
+                Id = u.Id,
+                Name = u.Name,
+                Email = u.Email,
+                Role = u.Role,
+                CreatedAt = u.CreatedAt
+            });
+            return Ok(result);
         }
 
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetUserById(Guid id)
+        [HttpGet("{id:guid}")]
+        [Authorize]
+        public async Task<IActionResult> GetById(Guid id)
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (userIdClaim == null || (new Guid(userIdClaim) != id && !User.IsInRole(Role.UserRole.Admin.ToString())))
+            var user = await _repo.GetByIdAsync(id);
+            if (user == null) return NotFound();
+            var dto = new UserResponseDto
             {
-                return Forbid("You do not have permission to view this profile.");
-            }
-
-            var user = await _userService.GetUserProfileAsync(id);
-            if (user == null)
-            {
-                return NotFound();
-            }
-            return Ok(user);
+                Id = user.Id,
+                Name = user.Name,
+                Email = user.Email,
+                Role = user.Role,
+                CreatedAt = user.CreatedAt
+            };
+            return Ok(dto);
         }
 
-        [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateUser(Guid id, [FromBody] UpdateUserRequest request)
+        [HttpPut("{id:guid}")]
+        [Authorize]
+        public async Task<IActionResult> Update(Guid id, [FromBody] UserUpdateDto dto)
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (userIdClaim == null || (new Guid(userIdClaim) != id && !User.IsInRole(Role.UserRole.Admin.ToString())))
-            {
-                return Forbid("You do not have permission to update this profile.");
-            }
+            var user = await _repo.GetByIdAsync(id);
+            if (user == null) return NotFound();
 
-            var updatedUser = await _userService.UpdateUserProfileAsync(id, request);
-            if (updatedUser == null)
-            {
-                return NotFound();
-            }
-            return Ok(updatedUser);
+            user.Name = dto.Name ?? user.Name;
+            user.Role = dto.Role ?? user.Role;
+            if (dto.IsActive.HasValue) user.IsActive = dto.IsActive.Value;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            await _repo.UpdateAsync(user);
+            await _repo.SaveChangesAsync();
+            return NoContent();
         }
 
-        [HttpDelete("{id}")]
-        [Authorize(Roles = "Admin")] // Apenas admins podem deletar usuários
-        public async Task<IActionResult> DeleteUser(Guid id)
+        [HttpDelete("{id:guid}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> Delete(Guid id)
         {
-            var deleted = await _userService.DeleteUserAsync(id);
-            if (!deleted)
-            {
-                return NotFound();
-            }
-            return NoContent(); // 204 No Content para deleções bem-sucedidas
+            var user = await _repo.GetByIdAsync(id);
+            if (user == null) return NotFound();
+
+            await _repo.DeleteAsync(user);
+            await _repo.SaveChangesAsync();
+            return NoContent();
         }
     }
+
 }

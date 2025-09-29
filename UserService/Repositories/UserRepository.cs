@@ -1,59 +1,50 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using UserService.Data;
-using UserService.Interfaces;
 using UserService.Models;
 
 namespace UserService.Repositories
 {
     public class UserRepository : IUserRepository
     {
-        private readonly UserDbContext _context;
+        private readonly AppDbContext _context;
+        public UserRepository(AppDbContext context) => _context = context;
 
-        public UserRepository(UserDbContext context)
+        public async Task AddAsync(User user)
         {
-            _context = context;
+            await _context.Users.AddAsync(user);
         }
 
-        public async Task<User> GetUserByIdAsync(Guid id)
+        public async Task DeleteAsync(User user)
         {
-            return await _context.Users.FindAsync(id);
+            _context.Users.Remove(user);
         }
 
-        public async Task<User> GetUserByEmailAsync(string email)
+        public async Task<IEnumerable<User>> GetAllAsync(int page = 1, int pageSize = 50)
+        {
+            return await _context.Users
+                .OrderBy(u => u.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+        }
+
+        public async Task<User?> GetByEmailAsync(string email)
         {
             return await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
         }
 
-        public async Task AddUserAsync(User user)
+        public async Task<User?> GetByIdAsync(Guid id)
         {
-            _context.Users.Add(user);
+            return await _context.Users.FindAsync(id);
+        }
+
+        public async Task SaveChangesAsync()
+        {
             await _context.SaveChangesAsync();
         }
 
-        public async Task UpdateUserAsync(User user)
+        public async Task UpdateAsync(User user)
         {
             _context.Users.Update(user);
-            await _context.SaveChangesAsync();
-        }
-
-        public async Task DeleteUserAsync(Guid id)
-        {
-            var user = await GetUserByIdAsync(id);
-            if (user != null)
-            {
-                _context.Users.Remove(user);
-                await _context.SaveChangesAsync();
-            }
-        }
-
-        public async Task<IEnumerable<User>> GetAllUsersAsync()
-        {
-            return await _context.Users.ToListAsync();
-        }
-
-        public Task<User?> GetByEmailAsync(string email)
-        {
-            throw new NotImplementedException();
         }
     }
 }

@@ -1,15 +1,12 @@
 ﻿using UserService.Models;
 
-namespace UserService.Interfaces
+public interface IUserRepository
 {
-    public interface IUserRepository
-    {
-        Task<User> GetUserByIdAsync(Guid id);
-        Task<User> GetUserByEmailAsync(string email);
-        Task AddUserAsync(User user);
-        Task UpdateUserAsync(User user);
-        Task DeleteUserAsync(Guid id);
-        Task<IEnumerable<User>> GetAllUsersAsync();
-        Task<User?> GetByEmailAsync(string email);
-    }
+    Task<User?> GetByIdAsync(Guid id);
+    Task<User?> GetByEmailAsync(string email);
+    Task<IEnumerable<User>> GetAllAsync(int page = 1, int pageSize = 50);
+    Task AddAsync(User user);
+    Task UpdateAsync(User user);
+    Task DeleteAsync(User user);
+    Task SaveChangesAsync();
 }

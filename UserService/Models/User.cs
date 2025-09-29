@@ -4,22 +4,30 @@ namespace UserService.Models
 {
     //public enum UserRole { User, Admin }
 
+    using System.ComponentModel.DataAnnotations;
+
     public class User
     {
-        public int Id { get; set; }
+        [Key]
+        public Guid Id { get; set; } = Guid.NewGuid();
 
+        [Required]
+        [MaxLength(100)]
         public string Name { get; set; } = string.Empty;
 
+        [Required]
+        [EmailAddress]
         public string Email { get; set; } = string.Empty;
 
-        public string Password { get; set; } = string.Empty;
+        [Required]
+        public string PasswordHash { get; set; } = string.Empty;
 
-        public UserRole Role { get; set; }
+        [MaxLength(50)]
+        public string Role { get; set; }
+
+        public bool IsActive { get; set; } = true;
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-
-
-        //TODO entender como relacionar com o projeto de Games no microservices
-        //no Monolito estava como list<game>
+        public DateTime? UpdatedAt { get; set; }
     }
 }

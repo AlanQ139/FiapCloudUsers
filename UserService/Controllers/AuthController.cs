@@ -2,56 +2,65 @@
 using Microsoft.AspNetCore.Mvc;
 using UserService.DTOs;
 using UserService.Interfaces;
+using UserService.Models;
 
 namespace UserService.Controllers
 {
+
     [ApiController]
-    [Route("api/[controller]")] // api/Auth
+    [Route("api/[controller]")]
     public class AuthController : ControllerBase
     {
-        private readonly AuthService _userService;
+        private readonly IUserRepository _repo;
+        private readonly IAuthService _auth;
 
-        public AuthController(AuthService userService)
+        public AuthController(IUserRepository repo, IAuthService auth)
         {
-            _userService = userService;
+            _repo = repo;
+            _auth = auth;
         }
 
         [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] RegisterUserRequest request)
+        public async Task<IActionResult> Register([FromBody] UserCreateDto dto)
         {
-            try
+            var exists = await _repo.GetByEmailAsync(dto.Email);
+            if (exists != null) return Conflict("Email already in use.");
+
+            var user = new User
             {
-                var response = await _userService.RegisterAsync(request);
-                
-                return CreatedAtAction(nameof(Register), response);
-            }
-            catch (InvalidOperationException ex)
+                Name = dto.Name,
+                Email = dto.Email,
+                PasswordHash = _auth.HashPassword(dto.Password),
+                Role = dto.Role ?? "User"
+            };
+
+            await _repo.AddAsync(user);
+            await _repo.SaveChangesAsync();
+
+            var response = new UserResponseDto
             {
-                return BadRequest(new { message = ex.Message });
-            }
-            catch (Exception)
-            {
-                return StatusCode(500, "An error occurred during registration.");
-            }
+                Id = user.Id,
+                Name = user.Name,
+                Email = user.Email,
+                Role = user.Role,
+                CreatedAt = user.CreatedAt
+            };
+
+            return CreatedAtAction(nameof(Register), response);
         }
 
         [HttpPost("login")]
-        public async Task<IActionResult> Login([FromBody] LoginRequest request)
+        public async Task<IActionResult> Login([FromBody] UserLoginDto dto)
         {
-            try
-            {
-                var response = await _userService.LoginAsync(request);
-                return Ok(response);
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                return Unauthorized(new { message = ex.Message });
-            }
-            catch (Exception)
-            {
-                return StatusCode(500, "An error occurred during login.");
-            }
+            var user = await _repo.GetByEmailAsync(dto.Email);
+            if (user == null) return Unauthorized("Invalid credentials.");
+
+            if (!_auth.VerifyPassword(user.PasswordHash, dto.Password)) return Unauthorized("Invalid credentials.");
+
+            var token = _auth.GenerateToken(user);
+            return Ok(new { token });
         }
     }
+
 }
 

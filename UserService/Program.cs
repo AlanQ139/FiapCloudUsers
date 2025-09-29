@@ -1,95 +1,100 @@
 using FiapCloudGamesAPI.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using System;
 using System.Text;
-using UserService.Data;
 using UserService.Interfaces;
 using UserService.Repositories;
-//Adicionado do monolito FIAPCloudGamesProject, para reaproveitar o código
-//precisa analisar o que realmente é necessário
-//modificar o que precisa ser modificado
-//e remover o que não for necessário para microservices
 
 var builder = WebApplication.CreateBuilder(args);
 
-if (!builder.Environment.IsDevelopment())
-{
-    builder.WebHost.UseUrls("http://0.0.0.0:80");
-}
-
+// Configuration
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 //builder.Services.AddSwaggerGen();
-//Com erro comentar por enquanto
-
-#region Banco de dados
-//builder.Services.AddDbContext<UserDbContext>(options =>
-//    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
-//Com erro comentar por enquanto
-#endregion
-
-#region Injeção de dependência
-builder.Services.AddScoped<IUserRepository, UserRepository>();
-builder.Services.AddScoped<AuthService>();
-#endregion
-
-#region JWT Auth
-//builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-//    .AddJwtBearer(options =>
-//    {
-//        options.TokenValidationParameters = new TokenValidationParameters
-//        {
-//            ValidateIssuer = true,
-//            ValidateAudience = true,
-//            ValidateLifetime = true,
-//            ValidateIssuerSigningKey = true,
-//            ValidIssuer = builder.Configuration["Jwt:Issuer"],
-//            ValidAudience = builder.Configuration["Jwt:Audience"],
-//            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
-//        };
-//    });
-//Com erro comentar por enquanto
-#endregion
-
-//para o Erro de Cors
-builder.Services.AddCors(options =>
+builder.Services.AddSwaggerGen(c =>
 {
-    options.AddDefaultPolicy(policy =>
+    c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
     {
-        policy.AllowAnyOrigin()
-              .AllowAnyHeader()
-              .AllowAnyMethod();
+        Title = "UserService API",
+        Version = "v1"
+    });
+
+    // Configuração para suportar JWT no Swagger
+    c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Description = "Insira o token JWT usando o prefixo 'Bearer'.\nExemplo: Bearer {seu token}",
+        Name = "Authorization",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+        Scheme = "Bearer"
+    });
+
+    c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    {
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                {
+                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            new string[] {}
+        }
     });
 });
 
+
+// DbContext: por enquanto usar InMemory para validar localmente
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseInMemoryDatabase("FiapCloudUsersDev"));
+
+// Dependency Injection
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+
+// JWT configuration
+var jwtKey = builder.Configuration["Jwt:Key"] ?? "ReplaceWithStrongKeyForDevOnly1234567890";
+var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "FiapCloud";
+var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "FiapCloudClients";
+var keyBytes = Encoding.UTF8.GetBytes(jwtKey);
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.RequireHttpsMetadata = false;
+    options.SaveToken = true;
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = jwtIssuer,
+        ValidAudience = jwtAudience,
+        IssuerSigningKey = new SymmetricSecurityKey(keyBytes)
+    };
+});
+
+builder.Services.AddAuthorization();
+
 var app = builder.Build();
-//para aplicar as migrations na primeira vez que subir o container do Docker
-//using (var scope = app.Services.CreateScope())
-//{
-//    var dbContext = scope.ServiceProvider.GetRequiredService<UserDbContext>();
-//    dbContext.Database.Migrate();
-//}
-//migrate com erro comentar por enquanto
-app.UseCors();
 
-#region Swagger
 app.UseSwagger();
-//app.UseSwaggerUI();
-//Com erro comentar por enquanto
-#endregion
+app.UseSwaggerUI();
 
-#region Middleware customizado
-//app.UseMiddleware<ErrorHandlingMiddleware>();
-//Com erro comentar por enquanto
-#endregion
-
-#region Pipeline de autenticação e autorização
-app.UseHttpsRedirection();
-
+app.UseRouting();
 app.UseAuthentication();
-
 app.UseAuthorization();
 
 app.MapControllers();
-#endregion
 
 app.Run();
+
