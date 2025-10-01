@@ -50,8 +50,12 @@ builder.Services.AddSwaggerGen(c =>
 
 
 // DbContext: por enquanto usar InMemory para validar localmente
+//builder.Services.AddDbContext<AppDbContext>(options =>
+//    options.UseInMemoryDatabase("FiapCloudUsersDev"));
+//,mudando de InMemory para SQL Server LocalDB
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseInMemoryDatabase("FiapCloudUsersDev"));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
 
 // Dependency Injection
 builder.Services.AddScoped<IUserRepository, UserRepository>();
