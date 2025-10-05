@@ -13,7 +13,6 @@ var builder = WebApplication.CreateBuilder(args);
 // Configuration
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-//builder.Services.AddSwaggerGen();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
@@ -48,24 +47,14 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-
-// DbContext: por enquanto usar InMemory para validar localmente
-//builder.Services.AddDbContext<AppDbContext>(options =>
-//    options.UseInMemoryDatabase("FiapCloudUsersDev"));
-//,mudando de InMemory para SQL Server LocalDB
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
-
 
 // Dependency Injection
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
 // JWT configuration
-//var jwtKey = builder.Configuration["Jwt:Key"] ?? "ReplaceWithStrongKeyForDevOnly1234567890";
-//var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "FiapCloud";
-//var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "FiapCloudClients";
-//var keyBytes = Encoding.UTF8.GetBytes(jwtKey);
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -80,27 +69,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
         };
     });
-
-
-//builder.Services.AddAuthentication(options =>
-//{
-//    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-//    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-//})
-//.AddJwtBearer(options =>
-//{
-//    options.RequireHttpsMetadata = false;
-//    options.SaveToken = true;
-//    options.TokenValidationParameters = new TokenValidationParameters
-//    {
-//        ValidateIssuer = true,
-//        ValidateAudience = true,
-//        ValidateIssuerSigningKey = true,
-//        ValidIssuer = jwtIssuer,
-//        ValidAudience = jwtAudience,
-//        IssuerSigningKey = new SymmetricSecurityKey(keyBytes)
-//    };
-//});
 
 builder.Services.AddAuthorization();
 
@@ -118,10 +86,35 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 //para aplicar as migrations na primeira vez que subir o container do Docker
+//using (var scope = app.Services.CreateScope())
+//{
+//    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+//    dbContext.Database.Migrate();
+//}
+
+// Esperar o banco estar pronto (até 30 segundos)
 using (var scope = app.Services.CreateScope())
 {
-    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    dbContext.Database.Migrate();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    int retries = 0;
+    const int maxRetries = 10;
+
+    while (true)
+    {
+        try
+        {
+            db.Database.Migrate();
+            break;
+        }
+        catch (Exception ex)
+        {
+            retries++;
+            if (retries >= maxRetries)
+                throw;
+            Console.WriteLine($"Banco ainda não pronto... tentando novamente ({retries}/{maxRetries})");
+            Thread.Sleep(3000);
+        }
+    }
 }
 
 app.UseCors();
