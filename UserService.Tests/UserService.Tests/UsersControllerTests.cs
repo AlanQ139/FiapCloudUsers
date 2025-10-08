@@ -1,13 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Moq;
-using Octopus.Client.Repositories.Async;
 using UserService.Controllers;
 using UserService.DTOs;
-using UserService.Interfaces;
 using UserService.Models;
 using Xunit;
 

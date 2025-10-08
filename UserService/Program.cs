@@ -86,12 +86,6 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 //para aplicar as migrations na primeira vez que subir o container do Docker
-//using (var scope = app.Services.CreateScope())
-//{
-//    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-//    dbContext.Database.Migrate();
-//}
-
 // Esperar o banco estar pronto (até 30 segundos)
 using (var scope = app.Services.CreateScope())
 {
