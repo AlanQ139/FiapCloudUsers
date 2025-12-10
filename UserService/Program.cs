@@ -6,22 +6,23 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using MassTransit;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// BD
+// ============ DATABASE ============
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
-// config para serviços e repositórios
+
+// Repositórios e serviços
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
-// Adicionando MassTransit com RabbitMQ
+// ============ RABBITMQ + MASSTRANSIT ============
 builder.Services.AddMassTransit(x =>
 {
-    // UserService NÃO tem consumers, apenas publica eventos
-    // Não precisa registrar nenhum consumer aqui
-
+    // UserService publica eventos, não consome
     x.UsingRabbitMq((context, cfg) =>
     {
         cfg.Host(builder.Configuration["RabbitMQ:Host"], "/", h =>
@@ -30,10 +31,8 @@ builder.Services.AddMassTransit(x =>
             h.Password(builder.Configuration["RabbitMQ:Password"]!);
         });
 
-        // Configurar endpoints (vazio porque não há consumers)
         cfg.ConfigureEndpoints(context);
 
-        // Políticas de resiliência para publicação
         cfg.UseMessageRetry(r => r.Incremental(
             retryLimit: 3,
             initialInterval: TimeSpan.FromSeconds(1),
@@ -42,7 +41,7 @@ builder.Services.AddMassTransit(x =>
     });
 });
 
-// Configuração para suportar JWT
+// ============ JWT ============
 var jwtKey = builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("Jwt:Key não configurado");
 
@@ -63,47 +62,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 
-// ============ SWAGGER ============
-builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-// Configuration
-//builder.Services.AddSwaggerGen(c =>
-//{
-//    c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
-//    {
-//        Title = "UserService API",
-//        Version = "v1"
-//    });
-
-//    // Configuração para suportar JWT no Swagger
-//    c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
-//    {
-//        Description = "Insira o token JWT usando o prefixo 'Bearer'.\nExemplo: Bearer {seu token}",
-//        Name = "Authorization",
-//        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-//        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
-//        Scheme = "Bearer"
-//    });
-
-//    c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
-//    {
-//        {
-//            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
-//            {
-//                Reference = new Microsoft.OpenApi.Models.OpenApiReference
-//                {
-//                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
-//                    Id = "Bearer"
-//                }
-//            },
-//            new string[] {}
-//        }
-//    });
-//});
-
-
-// Para evitar o Erro de Cors
+// ============ CORS ============
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
@@ -114,12 +73,45 @@ builder.Services.AddCors(options =>
     });
 });
 
+// ============ SWAGGER ============
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+    {
+        Title = "UserService API",
+        Version = "v1"
+    });
+
+    c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Description = "Insira o token JWT usando o prefixo 'Bearer'.\nExemplo: Bearer {TOKEN}",
+        Name = "Authorization",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+        Scheme = "Bearer"
+    });
+
+    c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    {
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                {
+                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            new string[] {}
+        }
+    });
+});
+
 // ============ HEALTH CHECKS ============
-builder.Services.AddHealthChecks()
-    .AddDbContextCheck<AppDbContext>("database")
-    .AddRabbitMQ(
-        rabbitConnectionString: $"amqp://{builder.Configuration["RabbitMQ:Username"]}:{builder.Configuration["RabbitMQ:Password"]}@{builder.Configuration["RabbitMQ:Host"]}:5672/",
-        name: "rabbitmq");
+builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
@@ -131,8 +123,10 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("AllowAll");
+
 app.UseAuthentication();
 app.UseAuthorization();
+
 app.MapControllers();
 
 app.MapHealthChecks("/health");
