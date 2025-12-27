@@ -17,6 +17,7 @@ namespace UserService.Controllers
 
         [HttpGet]
         [Authorize(Roles = "Admin")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetAll([FromQuery] int page = 1, [FromQuery] int pageSize = 50)
         {
             var users = await _repo.GetAllAsync(page, pageSize);
@@ -33,6 +34,7 @@ namespace UserService.Controllers
 
         [HttpGet("{id:guid}")]
         [Authorize]
+        [AllowAnonymous]
         public async Task<IActionResult> GetById(Guid id)
         {
             var user = await _repo.GetByIdAsync(id);
@@ -50,6 +52,7 @@ namespace UserService.Controllers
 
         [HttpPut("{id:guid}")]
         [Authorize]
+        [AllowAnonymous]
         public async Task<IActionResult> Update(Guid id, [FromBody] UserUpdateDto dto)
         {
             var user = await _repo.GetByIdAsync(id);
@@ -67,6 +70,7 @@ namespace UserService.Controllers
 
         [HttpDelete("{id:guid}")]
         [Authorize(Roles = "Admin")]
+        [AllowAnonymous]
         public async Task<IActionResult> Delete(Guid id)
         {
             var user = await _repo.GetByIdAsync(id);

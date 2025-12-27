@@ -115,6 +115,60 @@ builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
+// ============ DATABASE MIGRATIONS ============
+//using (var scope = app.Services.CreateScope())
+//{
+//    try
+//    {
+//        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+//        db.Database.Migrate();
+//        Console.WriteLine("UsersDb migrado/criado com sucesso!");
+//    }
+//    catch (Exception ex)
+//    {
+//        Console.WriteLine("Erro ao aplicar migrations no UsersService:");
+//        Console.WriteLine(ex.Message);
+//    }
+//}
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    int retries = 0;
+    const int maxRetries = 10;
+
+    while (true)
+    {
+        try
+        {
+            db.Database.Migrate();
+            break;
+        }
+        catch (Exception ex)
+        {
+            retries++;
+            if (retries >= maxRetries)
+                throw;
+            Console.WriteLine($"Banco ainda não pronto... tentando novamente ({retries}/{maxRetries})");
+            Thread.Sleep(3000);
+        }
+    }
+}
+
+app.Use(async (context, next) =>
+{
+    var isInternal =
+        context.Request.Headers.ContainsKey("X-Internal-Call")
+        && context.Request.Headers["X-Internal-Call"] == "true";
+
+    if (isInternal)
+    {
+        await next();
+        return;
+    }
+
+    await next();
+});
+
 // ============ MIDDLEWARE ============
 if (app.Environment.IsDevelopment())
 {
