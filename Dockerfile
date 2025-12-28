@@ -3,14 +3,14 @@ FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 
 # copia csproj e nuget.config
-COPY FiapCloudUsers/UserService/UserService.csproj UserService/
-COPY FiapCloudUsers/nuget.config .
+COPY UserService/UserService.csproj UserService/
+COPY nuget.config .
 
-# restore via GitHub Packages
+# restore
 RUN dotnet restore UserService/UserService.csproj
 
-# copia o código
-COPY FiapCloudUsers/UserService/. UserService/
+# copia o restante
+COPY UserService/. UserService/
 
 # publish
 RUN dotnet publish UserService/UserService.csproj -c Release -o /app/publish
