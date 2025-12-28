@@ -2,14 +2,17 @@
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 
+# copia csproj e nuget.config
 COPY FiapCloudUsers/UserService/UserService.csproj UserService/
-COPY SharedMessages/SharedMessages.csproj SharedMessages/
+COPY FiapCloudUsers/nuget.config .
 
+# restore via GitHub Packages
 RUN dotnet restore UserService/UserService.csproj
 
+# copia o código
 COPY FiapCloudUsers/UserService/. UserService/
-COPY SharedMessages/. SharedMessages/
 
+# publish
 RUN dotnet publish UserService/UserService.csproj -c Release -o /app/publish
 
 # runtime
